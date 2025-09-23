@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\EventName;
 use App\Models\Market;
 use Illuminate\Console\Command;
 use function Laravel\Prompts\select;
@@ -65,5 +66,21 @@ class ImportData extends Command
             ])
             ->chunk(1000)
             ->each(fn ($chunk) => Market::insert($chunk->toArray()));
+    }
+
+    private function eventNames(string $path, string $now): void
+    {
+        collect(file($path))
+            ->skip(1)
+            ->map(fn ($line) => str_getcsv($line))
+            ->map(fn ($row) => [
+                'id' => $row[0],
+                'name' => $row[1],
+                'display_on_client' => $row[2],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->chunk(1000)
+            ->each(fn ($chunk) => EventName::insert($chunk->toArray()));
     }
 }

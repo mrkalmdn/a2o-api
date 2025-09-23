@@ -5,9 +5,9 @@ namespace Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Market>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\EventName>
  */
-class MarketFactory extends Factory
+class EventNameFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -18,8 +18,7 @@ class MarketFactory extends Factory
     {
         return [
             'name' => $this->faker->name(),
-            'domain' => $this->faker->domainName(),
-            'path' => $this->faker->url(),
+            'display_on_client' => $this->faker->boolean(),
         ];
     }
 }
