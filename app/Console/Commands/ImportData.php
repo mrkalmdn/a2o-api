@@ -3,8 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Models\EventName;
+use App\Models\LogEvent;
 use App\Models\Market;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use function Laravel\Prompts\select;
 
 class ImportData extends Command
@@ -82,5 +86,54 @@ class ImportData extends Command
             ])
             ->chunk(1000)
             ->each(fn ($chunk) => EventName::insert($chunk->toArray()));
+    }
+
+    private function logEvents(string $path, string $now): void
+    {
+        $processes = 10;
+
+        $tasks = [];
+        for ($i = 0; $i < $processes; $i++) {
+            $tasks[] = function () use ($path, $now, $i, $processes) {
+                DB::reconnect();
+
+                $handle = fopen($path, 'r');
+                fgets($handle); // Skip header
+                $current = 0;
+                $events = [];
+
+                while (($line = fgets($handle)) !== false) {
+                    if ($current++ % $processes !== $i) {
+                        continue;
+                    }
+
+                    $row = str_getcsv($line);
+                    $events[] = [
+                        'id' => $row[0],
+                        'market_id' => $row[1],
+                        'event_name_id' => $row[2],
+                        'session_id' => $row[3],
+                        'data' => $row[4],
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+
+                    if (count($events) === 1000) {
+                        DB::table('log_events')->insert($events);
+                        $events = [];
+                    }
+                }
+
+                if (!empty($events)) {
+                    DB::table('log_events')->insert($events);
+                }
+
+                fclose($handle);
+
+                return true;
+            };
+        }
+
+        Concurrency::run($tasks);
     }
 }
