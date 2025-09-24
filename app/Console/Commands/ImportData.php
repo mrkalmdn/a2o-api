@@ -6,6 +6,7 @@ use App\Models\EventName;
 use App\Models\LogEvent;
 use App\Models\Market;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -126,6 +127,57 @@ class ImportData extends Command
 
                 if (!empty($events)) {
                     DB::table('log_events')->insert($events);
+                }
+
+                fclose($handle);
+
+                return true;
+            };
+        }
+
+        Concurrency::run($tasks);
+    }
+
+    private function logServiceTitanJobs(string $path, string $now): void
+    {
+        $processes = 6;
+
+        $tasks = [];
+        for ($i = 0; $i < $processes; $i++) {
+            $tasks[] = function () use ($path, $now, $i, $processes) {
+                DB::reconnect();
+
+                $handle = fopen($path, 'r');
+                fgets($handle); // Skip header
+                $current = 0;
+                $events = [];
+
+                while (($line = fgets($handle)) !== false) {
+                    if ($current++ % $processes !== $i) {
+                        continue;
+                    }
+
+                    $row = str_getcsv($line);
+
+                    $events[] = [
+                        'id' => $row[0],
+                        'market_id' => $row[1],
+                        'start' => Carbon::parse($row[8]),
+                        'end' => Carbon::parse($row[9]),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+
+                    if (count($events) === 1000) {
+//                        DB::table('log_service_titan_jobs')->insert($events);
+                        Log::info(json_encode($events, JSON_PRETTY_PRINT));
+                        $events = [];
+                    }
+                }
+
+                if (!empty($events)) {
+//                    DB::table('log_service_titan_jobs')->insert($events);
+                    Log::info(json_encode($events, JSON_PRETTY_PRINT));
                 }
 
                 fclose($handle);
