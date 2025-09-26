@@ -4,28 +4,20 @@ namespace App\Reports;
 
 use App\Action\DateRangeGenerator;
 use App\Models\LogServiceTitanJob;
-use App\Reports\Contracts\ReportBuilder;
+use App\Reports\Queries\JobBookingQuery;
+use Illuminate\Support\Facades\Cache;
 
 class JobBooking implements Contracts\ReportBuilder
 {
+    public function __construct(private readonly JobBookingQuery $query)
+    {}
 
     public function build(array $params = []): array
     {
         $start = data_get($params, 'start', now()->startOfMonth());
         $end = data_get($params, 'end', now()->endOfMonth());
 
-        $logs = LogServiceTitanJob::query()
-            ->selectRaw("
-                DATE(start) as date,
-                market_id,
-                markets.name as market_name,
-                COUNT(*) as count
-            ")
-            ->join("markets", "markets.id", "=", "log_service_titan_jobs.market_id")
-            ->whereBetween("start", [$start, $end])
-            ->groupBy("date", "market_id", "markets.name")
-            ->orderBy("date")
-            ->get();
+        $logs = $this->query->execute($params);
 
         $dates = (new DateRangeGenerator())->execute($start, $end);
         $markets = $logs->pluck('market_name')->unique()->values()->toArray();
@@ -53,5 +45,19 @@ class JobBooking implements Contracts\ReportBuilder
             'labels' => $dates,
             'datasets' => $datasets,
         ];
+    }
+
+    public function export(array $params = []): array
+    {
+        $start = data_get($params, 'start', now()->startOfMonth());
+        $end = data_get($params, 'end', now()->endOfMonth());
+
+        $logs = $this->query->execute([$start, $end]);
+
+        return $logs->map(fn ($log) => [
+            'market'   => $log->market_name,
+            'date'     => $log->date,
+            'bookings' => $log->count,
+        ])->toArray();
     }
 }

@@ -5,55 +5,74 @@ namespace App\Reports;
 use App\Enums\Event;
 use App\Models\EventName;
 use App\Models\LogEvent;
+use App\Reports\Queries\ConversionFunnelQuery;
 use Illuminate\Support\Facades\DB;
 
 class ConversionFunnel implements Contracts\ReportBuilder
 {
+    public function __construct(private readonly ConversionFunnelQuery $query)
+    {}
 
     public function build(array $params = []): array
     {
-        $start = data_get($params, 'start', now()->startOfMonth());
-        $end = data_get($params, 'end', now()->endOfMonth());
+        [$events, $eventNames] = $this->query->execute($params);
 
-        $ids = Event::values();
-        $eventNames = EventName::query()
-            ->whereIn('id', $ids)
-            ->orderByRaw('FIELD(id, ' . implode(',', $ids) . ')')
-            ->get();
+        $labels = $eventNames->pluck('name')->unique()->toArray();
+        $datasets = [];
 
-        $selects = collect($eventNames)->map(function ($eventName, $index) {
-            $key = $eventName->id;
-            return "SUM(CASE WHEN event_name_id = $key THEN 1 ELSE 0 END) as event_$index";
-        })->implode(', ');
+        foreach ($events as $event) {
+            $data = [];
+            foreach ($eventNames as $index => $eventName) {
+                $currentValue = $event->{"event_$index"} ?? 0;
 
-        $event = LogEvent::query()
-            ->selectRaw($selects)
-            ->whereBetween(DB::raw('DATE(created_at)'), [$start, $end])
-            ->first();
+                if ($index === 0) {
+                    $data[] = 100;
+                } else {
+                    $previousIndex = $index - 1;
 
-        $labels = [];
-        $data = [];
+                    $previousValue = (int) data_get($event, "event_$previousIndex", 0);
+                    $previousValue = $previousValue === 0 ? 1 : $previousValue;
 
-        foreach ($eventNames as $index => $eventName) {
-            $currentValue = $event->{"event_$index"} ?? 0;
-            $labels[] = "$eventName->name ($currentValue)";
-
-            if ($index === 0) {
-                $data[] = 100;
-            } else {
-                $previousIndex = $index - 1;
-                $previousValue = $event->{"event_$previousIndex"} ?? 1;
-
-                $data[] = ($currentValue / $previousValue) * 100;
+                    $data[] = ($currentValue / $previousValue) * 100;
+                }
             }
+            $datasets[] = [
+                'label' => "$event->market",
+                'data'  => $data,
+            ];
         }
 
         return [
             'labels' => $labels,
-            'datasets' => [[
-                'label' => 'Conversion Funnel',
-                'data' => $data,
-            ]]
+            'datasets' => $datasets,
         ];
+    }
+
+    public function export(array $params = []): array
+    {
+        [$events, $eventNames] = $this->query->execute($params);
+
+
+        $rows = [];
+        foreach ($events as $event) {
+            foreach ($eventNames as $index => $eventName) {
+                $currentValue = $event->{"event_$index"} ?? 0;
+
+                $percentage = $index === 0
+                    ? 100
+                    : (($event->{"event_" . ($index - 1)} ?? 1) > 0
+                        ? ($currentValue / ($event->{"event_" . ($index - 1)} ?? 1)) * 100
+                        : 0);
+
+                $rows[] = [
+                    'market' => $event->market,
+                    'event' => $eventName->name,
+                    'conversions_total' => $currentValue,
+                    'conversions_percentage' => round($percentage, 2),
+                ];
+            }
+        }
+
+        return $rows;
     }
 }
