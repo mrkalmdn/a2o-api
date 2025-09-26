@@ -28,7 +28,9 @@ class ReportRequest extends FormRequest
             'type' => [
                 'required',
                 Rule::in(Report::values())
-            ]
+            ],
+            'markets' => ['required', 'array', 'min:1'],
+            'markets.*' => ['required', 'integer', Rule::exists('markets', 'id')],
         ];
     }
 }

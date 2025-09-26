@@ -18,6 +18,7 @@ class ReportController extends Controller
         $data = $report->build([
             'start' => $request->start,
             'end' => $request->end,
+            'markets' => $request->markets ?? [],
         ]);
 
         return response()->json($data);

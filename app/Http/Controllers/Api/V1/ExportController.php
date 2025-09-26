@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReportRequest;
 use App\Reports\ReportFactory;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExportController extends Controller
 {
@@ -32,7 +31,7 @@ class ExportController extends Controller
 
         $type = $request->type;
 
-        return new StreamedResponse(fn () => print($content), 200, [
+        return response()->stream(fn () => print($content), 200, [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=$type.csv",
         ]);

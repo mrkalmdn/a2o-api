@@ -34,7 +34,7 @@ class ConversionFunnelQuery
 
             $events = LogEvent::query()
                 ->selectRaw($selects)
-//                ->whereIn('market_id', $marketIds)
+                ->whereIn('market_id', $marketIds)
                 ->join("markets", "markets.id", "=", "log_events.market_id")
                 ->whereBetween(DB::raw('DATE(log_events.created_at)'), [$start, $end])
                 ->groupBy('market')

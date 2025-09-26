@@ -52,7 +52,7 @@ class JobBooking implements Contracts\ReportBuilder
         $start = data_get($params, 'start', now()->startOfMonth());
         $end = data_get($params, 'end', now()->endOfMonth());
 
-        $logs = $this->query->execute([$start, $end]);
+        $logs = $this->query->execute($params);
 
         return $logs->map(fn ($log) => [
             'market'   => $log->market_name,
